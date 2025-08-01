@@ -1,0 +1,2 @@
+# Dissertacao_de_Mestrado
+O presente repositório contém o material utilizado no âmbito da Dissertação para obtenção do Grau de Mestre em Ciências Militares Navais, na especialidade de Engenharia Naval Ramo de Armas e Eletrónica, Localização e Navegação em ambiente com disrupção de sinal GNSS, utilizando LIDAR e odometria visual.
