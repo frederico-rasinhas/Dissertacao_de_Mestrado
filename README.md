@@ -14,10 +14,10 @@ O objetivo deste trabalho consistiu no desenvolvimento de uma arquitetura robust
 ## Código
 A implementação foi realizada em Python e está organizada da seguinte forma:
 
-- **Odometria_visual** – Algoritmos de estimação de pose com base em visão computacional monocular.  
+- **Odometria Visual** – Algoritmos de estimação de pose com base em visão computacional monocular.  
     - **VO.py** – Implementa um sistema de odometria visual monocular em pós-processamento, lendo imagens comprimidas de um rosbag, extraindo e rastreando features entre frames consecutivos, estimando incrementos de pose com base na matriz essencial e numa restrição de plano para recuperação de escala.
 
-- **Odometria_lidar** – Algoritmos de estimação de pose utilizando dados LIDAR.  
+- **Odometria LIDAR** – Algoritmos de estimação de pose utilizando dados LIDAR.  
     - **Lidar.py** – Reconstrução de trajetória 2D com LiDAR, aplicando voxel downsampling, extração de arestas e planos e ICP robusto.
 
 - **ESKF_core** – Núcleo da implementação do ESKF, incluindo as funções de observação e correção de cada sensor.  
