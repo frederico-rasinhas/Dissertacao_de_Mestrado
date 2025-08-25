@@ -3,7 +3,7 @@
 Neste repositório é apresentado o código desenvolvido no âmbito da dissertação de mestrado em Ciências Militares Navais, na especialidade de Engenharia Naval – Ramo de Armas e Eletrónica. O trabalho centra-se na implementação de um sistema de localização e navegação em cenários com disrupção de sinal GNSS, integrando dados provenientes de encoders presentes nas rodas do veiculo, uma IMU, odometria visual e LIDAR através de um Error-State Extended Kalman Filter.
 
 <p align="center">
-  <img src="![Image](https://github.com/user-attachments/assets/0a7f5594-032d-4fcd-96eb-621b0416df42)" width="300" height="300">
+  <img src="https://github.com/user-attachments/assets/0a7f5594-032d-4fcd-96eb-621b0416df42" width="300" height="300">
 </p>
 
 ## Descrição
