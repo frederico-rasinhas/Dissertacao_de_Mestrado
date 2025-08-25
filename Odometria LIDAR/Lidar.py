@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Reconstrução de trajetória LiDAR 2D:
-  - Downsampling voxel
-  - Extração de features (edges/flats) via curvatura
-  - Normais locais via PCA (apenas em edges/flats)
-  - ICP scan-to-scan (Huber, multi-escala)
+2D LiDAR trajectory reconstruction:
+  - Voxel downsampling
+  - Feature extraction (edges/flats) via curvature
+  - Local normals via PCA (only on edges/flats)
+  - Scan-to-scan ICP (Huber loss, multi-scale)
 
-Para correr: ajustar BAG_PATH e LIDAR_TOPIC, depois executar.
+How to run: set BAG_PATH and LIDAR_TOPIC, then execute.
 """
 
 import os
@@ -17,27 +17,27 @@ import numpy as np
 import matplotlib.pyplot as plt
 from scipy.spatial import cKDTree
 
-# ===== CONFIGURAÇÃO =====
-BAG_PATH     = ''
-CSV_OUTPUT   = ''
-TXT_OUTPUT   = ''
-LIDAR_TOPIC  = '/scan'
-VOXEL_SIZE   = 0.015   # m
-EDGE_MAX     = 200
-FLAT_MAX     = 200
-MAX_CORR     = 0.3    # m
-CURV_WINDOW  = 5      # pontos de cada lado na curvatura
+# ===== CONFIGURATION =====
+BAG_PATH     = ''       # Path to input rosbag file
+CSV_OUTPUT   = ''       # Path to save CSV file with LiDAR increments
+TXT_OUTPUT   = ''       # Path to save trajectory in TUM format
+LIDAR_TOPIC  = '/scan'  # LiDAR topic name in rosbag
+VOXEL_SIZE   = 0.015    # Voxel size for downsampling [m]
+EDGE_MAX     = 200      # Max number of edge features per scan
+FLAT_MAX     = 200      # Max number of flat features per scan
+MAX_CORR     = 0.3      # Maximum correspondence distance [m]
+CURV_WINDOW  = 5        # Number of neighbors for curvature computation
 
-# ===== UTILITÁRIOS =====
+# ===== UTILITIES =====
 def extract_xy(scan_msg) -> np.ndarray:
-    """Extrai coordenadas XY do scan."""
+    """Extract XY coordinates from a 2D LiDAR scan message."""
     angles = np.linspace(scan_msg.angle_min, scan_msg.angle_max, len(scan_msg.ranges))
     r = np.asarray(scan_msg.ranges)
-    mask = np.isfinite(r)
+    mask = np.isfinite(r)  # Remove NaN/inf ranges
     return np.vstack((r[mask]*np.cos(angles[mask]), r[mask]*np.sin(angles[mask]))).T
 
 def voxel_downsample_xy(pts: np.ndarray, voxel: float) -> np.ndarray:
-    """Downsampling voxel para reduzir pontos redundantes."""
+    """Apply voxel downsampling to reduce redundant points."""
     if pts.size == 0:
         return pts
     keys = np.floor(pts/voxel).astype(int)
@@ -49,10 +49,11 @@ def voxel_downsample_xy(pts: np.ndarray, voxel: float) -> np.ndarray:
 
 def compute_normals(pts: np.ndarray, k: int = 8) -> np.ndarray:
     """
-    Calcula normais locais por PCA (em 2D: normal = perpendicular ao 1º vector próprio).
-    pts: pontos Nx2
-    k: vizinhos para PCA
-    return: normais Nx2, normalizada
+    Compute local normals using PCA.
+    In 2D: normal = perpendicular to first principal component.
+    pts: Nx2 point cloud
+    k: number of neighbors for PCA
+    return: Nx2 array of unit normals
     """
     if len(pts) < k + 1:
         return np.zeros_like(pts)
@@ -60,12 +61,12 @@ def compute_normals(pts: np.ndarray, k: int = 8) -> np.ndarray:
     normals = np.zeros_like(pts)
     for i, p in enumerate(pts):
         dists, idxs = tree.query(p, k=k+1)
-        neighbors = pts[idxs[1:]]  # ignora o próprio ponto
+        neighbors = pts[idxs[1:]]  # exclude the point itself
         C = neighbors - neighbors.mean(axis=0)
-        # PCA: vetor próprio do menor autovalor é a normal (2D)
+        # PCA: eigenvector of smallest eigenvalue is the normal
         U, S, Vt = np.linalg.svd(C, full_matrices=False)
         n = Vt[-1]
-        n = np.array([n[1], -n[0]])  # perpendicular (em 2D)
+        n = np.array([n[1], -n[0]])  # perpendicular (2D normal)
         n /= np.linalg.norm(n) + 1e-12
         normals[i] = n
     return normals
@@ -76,12 +77,13 @@ class FeatureExtractor:
 
     @staticmethod
     def rotmat(theta: float):
+        """Return a 2D rotation matrix."""
         c,s = np.cos(theta), np.sin(theta)
         return np.array([[c,-s],[s, c]])
 
     def extract_features_with_normals(self, pts: np.ndarray, k_norm=8):
         """
-        Extrai edges, flats e respetivas normais via PCA.
+        Extract edges and flats, along with their normals using PCA.
         """
         if pts.size == 0:
             return (np.empty((0,2)), np.empty((0,2)),
@@ -94,31 +96,35 @@ class FeatureExtractor:
         if N < 2*CURV_WINDOW+1:
             return (np.empty((0,2)), np.empty((0,2)),
                     np.empty((0,2)), np.empty((0,2)))
-        # Curvatura
+        # Curvature computation
         curv = np.zeros(N)
         for i in range(CURV_WINDOW, N-CURV_WINDOW):
             neigh = pts_s[i-CURV_WINDOW : i+CURV_WINDOW+1]
             curv[i] = np.linalg.norm(neigh.sum(0) - (2*CURV_WINDOW+1)*pts_s[i])
         interior = curv[CURV_WINDOW : N-CURV_WINDOW]
-        h = np.percentile(interior, 90)
-        l = np.percentile(interior, 10)
+        h = np.percentile(interior, 90)  # High curvature threshold
+        l = np.percentile(interior, 10)  # Low curvature threshold
 
         edges_idx = np.where(curv > h)[0][:EDGE_MAX]
         flats_idx = np.where(curv <= l)[0][:FLAT_MAX]
         edges = pts_s[edges_idx]
         flats = pts_s[flats_idx]
 
-        # Normais calculadas só para os points de interesse
+        # Compute normals only for selected points
         normals_all = compute_normals(pts_s, k=k_norm)
         edge_normals = normals_all[edges_idx]
         flat_normals = normals_all[flats_idx]
         return edges, flats, edge_normals, flat_normals
 
-# ===== ICP MELHORADO COM NORMAIS =====
+# ===== ICP WITH NORMALS =====
 class RobustICP(FeatureExtractor):
     def scan2scan_icp(self, e_now, f_now, ne_now, nf_now,
                       e_prev, f_prev, ne_prev, nf_prev,
                       iters=4, scales=None, huber=0.1):
+        """
+        Multi-scale robust ICP between consecutive scans,
+        using edge (point-to-line) and flat (point-to-point) features.
+        """
         if e_prev is None or len(e_prev)==0:
             return np.zeros(3), 0.0
         if scales is None:
@@ -126,10 +132,9 @@ class RobustICP(FeatureExtractor):
         total = len(e_prev) + len(f_prev) + 1e-6
         w_e = len(e_prev)/total
         w_f = len(f_prev)/total
-        pose = np.zeros(3)
+        pose = np.zeros(3)  # [dx, dy, dtheta]
         Hfin = np.eye(3)
         for scale in scales:
-            # Opcional: recalcular features/normais em pts escalados 
             if e_now.size==0 and f_now.size==0:
                 continue
             kE, kF = cKDTree(e_prev), cKDTree(f_prev)
@@ -140,7 +145,7 @@ class RobustICP(FeatureExtractor):
                 Te = (Rth@e_now.T).T + t2
                 Tf = (Rth@f_now.T).T + t2
                 H = np.zeros((3,3)); b = np.zeros(3)
-                # --- Edge: point-to-line usando normais
+                # --- Edge: point-to-line using normals
                 for idx, p in enumerate(Te):
                     d, j = kE.query(p, k=1)
                     if d > self.max_corr: continue
@@ -178,7 +183,7 @@ class RobustICP(FeatureExtractor):
 # ===== MAIN =====
 def main():
     if not os.path.isfile(BAG_PATH):
-        raise FileNotFoundError(f"Rosbag não encontrado: {BAG_PATH}")
+        raise FileNotFoundError(f"Rosbag not found: {BAG_PATH}")
     bag   = rosbag.Bag(BAG_PATH, 'r')
     scans = bag.read_messages([LIDAR_TOPIC])
 
@@ -203,50 +208,45 @@ def main():
 
         dx, dy, dtheta = inc
 
-        # --- CORREÇÃO DE REFERENCIAL ---
-        dx_rover =  dy      # "y" LiDAR = "x" rover
-        dy_rover = -dx      # "x" LiDAR = "-y" rover
+        # --- FRAME TRANSFORMATION ---
+        dx_rover =  dy      # "y" in LiDAR frame = "x" in rover frame
+        dy_rover = -dx      # "x" in LiDAR frame = "-y" in rover frame
 
         ts = t.to_sec()
         n_edges = len(e)
         n_flats = len(f)
         lidar_poses.append([ts, dx_rover, dy_rover, dtheta, n_edges, n_flats])
 
-
-
         prev_e, prev_f, prev_ne, prev_nf = e, f, ne, nf
 
     bag.close()
 
-        # Guardar CSV das poses LiDAR
-    
+    # Save CSV with LiDAR pose increments
     with open(CSV_OUTPUT, "w", newline='') as f:
         writer = csv.writer(f)
         writer.writerow(["timestamp", "dx", "dy", "dyaw", "n_edges", "n_flats"])
         writer.writerows(lidar_poses)
 
-        x, y, theta = 0.0, 0.0, 0.0
-        
+    # Export trajectory in TUM format
     with open(TXT_OUTPUT, "w") as f:
-        x, y, theta = 0.0, 0.0, 0.0  # Inicializar pose
+        x, y, theta = 0.0, 0.0, 0.0  # Initialize global pose
         for entry in lidar_poses:
             ts, dx, dy, dtheta, *_ = entry
 
-            # Atualizar pose incrementalmente
+            # Incremental pose update
             c, s = np.cos(theta), np.sin(theta)
             x += c * dx - s * dy
             y += s * dx + c * dy
             theta += dtheta
 
-            # Converter theta (yaw) em quaternion (assume movimento no plano XY)
+            # Convert yaw (theta) to quaternion (assume motion in XY plane)
             qx = 0.0
             qy = 0.0
             qz = np.sin(theta / 2)
             qw = np.cos(theta / 2)
 
-            # Escrever no formato TUM: timestamp x y z qx qy qz qw
+            # Write in TUM format: timestamp x y z qx qy qz qw
             f.write(f"{ts:.6f} {x:.6f} {y:.6f} 0.000000 {qx:.6f} {qy:.6f} {qz:.6f} {qw:.6f}\n")
-
 
 if __name__ == '__main__':
     main()
