@@ -5,3 +5,6 @@ O presente repositório contém o material utilizado no âmbito da Dissertação
 
 
 Os ficheiros Rosbag gravados no decurso dos cenários experimentais encontram-se disponiveis em (https://drive.google.com/drive/folders/16EBPGkYK5u9Sbr1qC-6h7XCL1-PKYs50?usp=sharing)
+
+
+Os scripts apresentado no presente repositório têm como base os ficheiros disponibilizados em (https://github.com/bdamas/ESKF)
