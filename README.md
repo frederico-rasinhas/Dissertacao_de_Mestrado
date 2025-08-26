@@ -1,4 +1,4 @@
-# Localização e Navegação em Ambiente GNSS-denied com LIDAR e Odometria Visual
+# Localização e navegação em ambientes com disrupção de sinal GNSS, utilizando LIDAR e odometria visual
 
 Neste repositório é apresentado o código desenvolvido no âmbito da dissertação de mestrado em Ciências Militares Navais, na especialidade de Engenharia Naval – Ramo de Armas e Eletrónica. O trabalho centra-se na implementação de um sistema de localização e navegação em cenários com disrupção de sinal GNSS, integrando dados provenientes de encoders presentes nas rodas do veiculo, uma IMU, odometria visual e LIDAR através de um Error-State Extended Kalman Filter.
 
