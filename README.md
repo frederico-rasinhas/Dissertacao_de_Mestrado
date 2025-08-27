@@ -31,8 +31,11 @@ A implementação foi realizada em Python e está organizada da seguinte forma:
 
 - **ESKF_main** – Scripts principais de execução do ESKF, responsáveis pelos ciclos completos de predição e correção, integrando a IMU e os diferentes sensores (VO, LIDAR, odometria de rodas e GNSS) nas suas múltiplas combinações.
 
-Os ficheiros rosbag utilizados nos cenários experimentais encontram-se disponíveis em:  
+Os ficheiros rosbag resultantes dos cenários experimentais estão disponíveis em:  
 https://drive.google.com/drive/folders/16EBPGkYK5u9Sbr1qC-6h7XCL1-PKYs50?usp=sharing
+
+Os videos decorrentes dos diferentes ensaios experimentais realizados encontram-se disponiveis em:
+https://youtube.com/playlist?list=PLIHwYXXCh3OrJB9YSrMBbW2YKTRc4kW_j&si=qDwTMgu3TwJE4JWa
 
 ## Autor
 Frederico Rasinhas  
